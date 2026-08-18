@@ -46,6 +46,7 @@ class BookingController extends Controller
             'building_number'    => 'nullable|string|max:50',
             'map_link'           => 'nullable|string|max:500',
             'notes'              => 'nullable|string',
+            'coupon_code' => 'nullable|string',
         ]);
 
         if ($validated['for_self']) {
@@ -126,6 +127,31 @@ class BookingController extends Controller
                 $options['total_price'] = 3500; // سعر افتراضي
             }
         }
+        $discountAmount = 0;
+
+        if (!empty($validated['coupon_code'])) {
+            $coupon = \App\Models\Coupon::where('code', $validated['coupon_code'])
+                ->where('is_active', true)
+                ->first();
+
+            if ($coupon && (!$coupon->expires_at || $coupon->expires_at >= now())
+                && (!$coupon->max_uses || $coupon->used_count < $coupon->max_uses)) {
+
+                $service = \App\Models\Service::find($validated['service_id']);
+                $servicePrice = $service->price ?? 0;
+
+                if ($servicePrice >= $coupon->min_order_amount) {
+                    $discountAmount = $coupon->type === 'percentage'
+                        ? round($servicePrice * ($coupon->value / 100), 2)
+                        : min($coupon->value, $servicePrice);
+
+                    $coupon->increment('used_count');
+                }
+            }
+        }
+
+        $bookingData['coupon_code']     = $discountAmount > 0 ? $validated['coupon_code'] : null;
+        $bookingData['discount_amount'] = $discountAmount;
         $bookingData['service_id']      = $validated['service_id'];
         $bookingData['payment_method']  = $validated['payment_method'];
         $bookingData['notes']           = $validated['notes'] ?? null;
@@ -185,6 +211,7 @@ class BookingController extends Controller
             'notes'             => 'nullable|string',
             'service_options'   => 'nullable|array',
             'service_options.*' => 'nullable',
+            'coupon_code' => 'nullable|string',
         ]);
 
         $booking->update($validated);

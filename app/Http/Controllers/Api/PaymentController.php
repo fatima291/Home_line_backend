@@ -37,7 +37,7 @@ class PaymentController extends Controller
         $booking->update([
             'payment_status' => 'paid',
             'payment_method' => 'online',
-            'amount_paid'    => $booking->service->price,
+            'amount_paid' => $booking->service->price - $booking->discount_amount,
         ]);
 
         return response()->json([

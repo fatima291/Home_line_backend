@@ -24,6 +24,8 @@ class Booking extends Model
         'cancelled_by',
         'payment_method',
         'payment_status',
+        'coupon_code',
+        'discount_amount',
         'amount_paid',
     ];
 

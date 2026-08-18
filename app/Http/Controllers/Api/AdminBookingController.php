@@ -44,13 +44,41 @@ class AdminBookingController extends Controller
         if ($validated['status'] === 'cancelled') {
             $updateData['cancelled_by'] = 'admin';
         } else {
-            $updateData['cancelled_by'] = null; // احتياط لو رجّع الحالة من إلغاء لشي تاني لاحقاً
+            $updateData['cancelled_by'] = null;
         }
 
         $booking->update($updateData);
 
         return response()->json([
             'message' => 'تم تحديث حالة الحجز بنجاح',
+            'booking' => $booking,
+        ]);
+    }
+
+    // تأكيد استلام الدفع النقدي (الإدمن فقط)
+    public function confirmCashPayment($id): JsonResponse
+    {
+        $booking = Booking::find($id);
+
+        if (!$booking) {
+            return response()->json(['message' => 'الحجز غير موجود'], 404);
+        }
+
+        if ($booking->payment_method !== 'cash') {
+            return response()->json(['message' => 'هذا الحجز ليس دفعاً نقدياً'], 422);
+        }
+
+        if ($booking->payment_status === 'paid') {
+            return response()->json(['message' => 'تم تأكيد دفع هذا الحجز مسبقاً'], 422);
+        }
+
+        $booking->update([
+            'payment_status' => 'paid',
+            'amount_paid'     => $booking->service->price - $booking->discount_amount,
+        ]);
+
+        return response()->json([
+            'message' => 'تم تأكيد استلام الدفع النقدي بنجاح',
             'booking' => $booking,
         ]);
     }
