@@ -49,6 +49,21 @@ class AdminBookingController extends Controller
 
         $booking->update($updateData);
 
+        $statusMessages = [
+            'confirmed' => 'تم تأكيد حجزك لخدمة ' . $booking->service->name,
+            'completed' => 'تم إنجاز خدمة ' . $booking->service->name . ' بنجاح، شكراً لك!',
+            'cancelled' => 'تم إلغاء حجزك لخدمة ' . $booking->service->name,
+        ];
+
+        if (isset($statusMessages[$validated['status']]) && $booking->customer_id) {
+            $tokens = $booking->customer->deviceTokens()->pluck('token')->toArray();
+            (new \App\Services\FirebaseService())->sendToTokens(
+                $tokens,
+                'تحديث حالة الحجز',
+                $statusMessages[$validated['status']]
+            );
+        }
+
         return response()->json([
             'message' => 'تم تحديث حالة الحجز بنجاح',
             'booking' => $booking,
@@ -77,6 +92,13 @@ class AdminBookingController extends Controller
             'amount_paid'     => $booking->service->price - $booking->discount_amount,
         ]);
 
+        $tokens = $booking->customer->deviceTokens()->pluck('token')->toArray();
+        (new \App\Services\FirebaseService())->sendToTokens(
+            $tokens,
+            'تأكيد الدفع',
+            'تم تأكيد استلام دفعتك النقدية لحجز ' . $booking->service->name
+        );
+        
         return response()->json([
             'message' => 'تم تأكيد استلام الدفع النقدي بنجاح',
             'booking' => $booking,

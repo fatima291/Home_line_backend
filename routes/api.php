@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\AdminBookingController;
@@ -15,6 +16,8 @@ use App\Http\Controllers\Api\ReviewController;
 // عام
 Route::get('/services', [ServiceController::class, 'index']);
 Route::get('/reviews', [ReviewController::class, 'index']);
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 // العملاء
 Route::post('/register', [AuthController::class, 'register']);
@@ -32,6 +35,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/bookings/{id}/cancel', [BookingController::class, 'cancel']);
     Route::post('/reviews', [ReviewController::class, 'store']);
     Route::post('/coupons/validate', [CouponController::class, 'validate_coupon']);
+    Route::post('/device-token', [AuthController::class, 'registerDeviceToken']);
 });
 
 // الإدمن

@@ -171,4 +171,74 @@ class AuthController extends Controller
             </div>
         ');
     }
+
+    // طلب استعادة كلمة المرور
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'login' => 'required|string', // يوزرنيم أو جوال
+        ]);
+
+        $customer = Customer::where('username', $validated['login'])
+            ->orWhere('phone', $validated['login'])
+            ->first();
+
+        // رسالة موحدة سواء الحساب موجود أو لأ (أمان: ما نكشف هل الحساب موجود)
+        $genericMessage = 'إذا كان الحساب موجوداً، تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.';
+
+        if (!$customer || !$customer->email) {
+            return response()->json(['message' => $genericMessage]);
+        }
+
+        $customer->update([
+            'reset_token'             => \Illuminate\Support\Str::random(40),
+            'reset_token_expires_at'  => now()->addMinutes(60),
+        ]);
+
+        \Illuminate\Support\Facades\Mail::to($customer->email)
+            ->send(new \App\Mail\ResetPasswordMail($customer));
+
+        return response()->json(['message' => $genericMessage]);
+    }
+
+    // تنفيذ إعادة تعيين كلمة المرور
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'token'                 => 'required|string',
+            'password'              => 'required|string|min:6|confirmed',
+        ]);
+
+        $customer = Customer::where('reset_token', $validated['token'])->first();
+
+        if (!$customer) {
+            return response()->json(['message' => 'رابط إعادة التعيين غير صحيح أو منتهي الصلاحية'], 400);
+        }
+
+        if ($customer->reset_token_expires_at < now()) {
+            return response()->json(['message' => 'رابط إعادة التعيين منتهي الصلاحية، الرجاء طلب رابط جديد'], 400);
+        }
+
+        $customer->update([
+            'password'                => Hash::make($validated['password']),
+            'reset_token'             => null,
+            'reset_token_expires_at'  => null,
+        ]);
+
+        return response()->json(['message' => 'تم تغيير كلمة المرور بنجاح، يمكنك الآن تسجيل الدخول']);
+    }
+
+    public function registerDeviceToken(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'token' => 'required|string',
+        ]);
+
+        \App\Models\DeviceToken::updateOrCreate(
+            ['token' => $validated['token']],
+            ['customer_id' => $request->user()->id]
+        );
+
+        return response()->json(['message' => 'تم تسجيل الجهاز بنجاح']);
+    }
 }

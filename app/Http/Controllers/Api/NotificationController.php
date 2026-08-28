@@ -3,37 +3,45 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\FirebaseService;
+use App\Models\Notification;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class NotificationController extends Controller
 {
-    protected $firebase;
-
-    public function __construct(FirebaseService $firebase)
+    // عرض كل إشعارات العميل المسجل دخوله
+    public function index(Request $request): JsonResponse
     {
-        $this->firebase = $firebase;
+        $notifications = $request->user()
+            ->notifications()
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'unread_count' => $notifications->where('is_read', false)->count(),
+            'notifications' => $notifications,
+        ]);
     }
 
-    public function send(Request $request)
+    // تعليم إشعار واحد كمقروء
+    public function markAsRead(Request $request, $id): JsonResponse
     {
-        $request->validate([
-            'token' => 'required|string',
-            'title' => 'required|string',
-            'body'  => 'required|string',
-        ]);
+        $notification = $request->user()->notifications()->find($id);
 
-        try {
-            $this->firebase->sendNotification(
-                $request->token,
-                $request->title,
-                $request->body
-            );
-
-            return response()->json(['message' => 'تم إرسال الإشعار بنجاح'], 200);
-
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        if (!$notification) {
+            return response()->json(['message' => 'الإشعار غير موجود'], 404);
         }
+
+        $notification->update(['is_read' => true]);
+
+        return response()->json(['message' => 'تم تعليم الإشعار كمقروء']);
+    }
+
+    // تعليم كل الإشعارات كمقروءة
+    public function markAllAsRead(Request $request): JsonResponse
+    {
+        $request->user()->notifications()->update(['is_read' => true]);
+
+        return response()->json(['message' => 'تم تعليم كل الإشعارات كمقروءة']);
     }
 }

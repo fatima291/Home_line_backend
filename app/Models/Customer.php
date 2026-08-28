@@ -25,6 +25,8 @@ class Customer extends Authenticatable
         'street',
         'building_number',
         'location_link',
+        'reset_token',
+        'reset_token_expires_at',
     ];
 
     protected $hidden = [
@@ -36,4 +38,8 @@ class Customer extends Authenticatable
         return $this->hasMany(Booking::class);
     }
     
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
 }

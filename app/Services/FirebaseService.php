@@ -5,6 +5,7 @@ namespace App\Services;
 use Kreait\Firebase\Factory;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification;
+use Kreait\Firebase\Messaging\MulticastSendReport;
 
 class FirebaseService
 {
@@ -18,11 +19,15 @@ class FirebaseService
         $this->messaging = $factory->createMessaging();
     }
 
-    public function sendNotification($token, $title, $body)
+    public function sendToTokens(array $tokens, string $title, string $body): ?MulticastSendReport
     {
-        $message = CloudMessage::withTarget('token', $token)
+        if (empty($tokens)) {
+            return null;
+        }
+
+        $message = CloudMessage::new()
             ->withNotification(Notification::create($title, $body));
 
-        return $this->messaging->send($message);
+        return $this->messaging->sendMulticast($message, $tokens);
     }
 }
