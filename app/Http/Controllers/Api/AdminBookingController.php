@@ -71,7 +71,7 @@ class AdminBookingController extends Controller
     }
 
     // تأكيد استلام الدفع النقدي (الإدمن فقط)
-    public function confirmCashPayment($id): JsonResponse
+    public function confirmCashPayment(Request $request, $id): JsonResponse
     {
         $booking = Booking::find($id);
 
@@ -87,18 +87,24 @@ class AdminBookingController extends Controller
             return response()->json(['message' => 'تم تأكيد دفع هذا الحجز مسبقاً'], 422);
         }
 
+        $calculatedPrice = $booking->service_options['total_price'] ?? null;
+
+        if ($calculatedPrice !== null) {
+            // خدمة سعرها محسوب مسبقاً (مكيفات/مناسبات/حشرات)
+            $finalAmount = $calculatedPrice - $booking->discount_amount;
+        } else {
+            // خدمة بدون سعر مسبق: الإدمن يحدد المبلغ يدوياً بعد الاتفاق مع العميل
+            $validated = $request->validate([
+                'amount' => 'required|numeric|min:0',
+            ]);
+            $finalAmount = $validated['amount'];
+        }
+
         $booking->update([
             'payment_status' => 'paid',
-            'amount_paid'     => $booking->service->price - $booking->discount_amount,
+            'amount_paid'    => $finalAmount,
         ]);
 
-        $tokens = $booking->customer->deviceTokens()->pluck('token')->toArray();
-        (new \App\Services\FirebaseService())->sendToTokens(
-            $tokens,
-            'تأكيد الدفع',
-            'تم تأكيد استلام دفعتك النقدية لحجز ' . $booking->service->name
-        );
-        
         return response()->json([
             'message' => 'تم تأكيد استلام الدفع النقدي بنجاح',
             'booking' => $booking,

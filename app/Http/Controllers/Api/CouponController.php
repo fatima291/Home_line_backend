@@ -68,8 +68,9 @@ class CouponController extends Controller
     public function validate_coupon(Request $request): JsonResponse
     {
         $request->validate([
-            'code'       => 'required|string',
-            'service_id' => 'required|exists:services,id',
+            'code'         => 'required|string',
+            'service_id'   => 'required|exists:services,id',
+            'total_amount' => 'nullable|numeric|min:0',
         ]);
 
         $coupon = Coupon::where('code', $request->code)
@@ -88,8 +89,16 @@ class CouponController extends Controller
             return response()->json(['message' => 'تم استنفاد عدد مرات استخدام هذا الكود'], 400);
         }
 
-        $service = \App\Models\Service::find($request->service_id);
-        $servicePrice = $service->price ?? 0;
+        if ($request->filled('total_amount') && $request->total_amount > 0) {
+            $servicePrice = (float) $request->total_amount;
+        } else {
+            $service = \App\Models\Service::find($request->service_id);
+            $servicePrice = $service->price ?? 0;
+        }
+
+        if ($servicePrice <= 0) {
+            return response()->json(['message' => 'لا يمكن تطبيق كود الخصم على هذه الخدمة حالياً'], 400);
+        }
 
         if ($servicePrice < $coupon->min_order_amount) {
             return response()->json([

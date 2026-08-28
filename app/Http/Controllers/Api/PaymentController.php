@@ -22,22 +22,23 @@ class PaymentController extends Controller
         }
 
         $validated = $request->validate([
-            'card_number'     => 'required|digits:16',
-            'card_holder'     => 'required|string|max:255',
-            'expiry_month'    => 'required|digits:2',
-            'expiry_year'     => 'required|digits:2',
-            'cvv'             => 'required|digits:3',
+            'card_number'  => 'required|digits:16',
+            'card_holder'  => 'required|string|max:255',
+            'expiry_month' => 'required|digits:2',
+            'expiry_year'  => 'required|digits:2',
+            'cvv'          => 'required|digits:3',
         ]);
 
-        // محاكاة رفض البطاقة لو رقمها كله أصفار (سيناريو اختبار فشل)
         if ($validated['card_number'] === '0000000000000000') {
             return response()->json(['message' => 'فشلت عملية الدفع، تأكدي من بيانات البطاقة'], 402);
         }
 
+        $basePrice = $booking->service_options['total_price'] ?? 0;
+
         $booking->update([
             'payment_status' => 'paid',
             'payment_method' => 'online',
-            'amount_paid' => $booking->service->price - $booking->discount_amount,
+            'amount_paid'    => $basePrice - $booking->discount_amount,
         ]);
 
         return response()->json([

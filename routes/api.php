@@ -5,7 +5,6 @@ use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PaymentController;
-use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\AdminBookingController;

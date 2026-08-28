@@ -28,7 +28,7 @@ class BookingController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $customer = $request->user(); // العميل المسجل دخوله حالياً (من التوكن)
+        $customer = $request->user();
 
         $validated = $request->validate([
             'service_id'         => 'required|exists:services,id',
@@ -46,11 +46,10 @@ class BookingController extends Controller
             'building_number'    => 'nullable|string|max:50',
             'map_link'           => 'nullable|string|max:500',
             'notes'              => 'nullable|string',
-            'coupon_code' => 'nullable|string',
+            'coupon_code'        => 'nullable|string',
         ]);
 
         if ($validated['for_self']) {
-            // الحجز لصاحب الحساب نفسه: نأخذ بياناته من جدول customers مباشرة
             $bookingData = [
                 'customer_id'      => $customer->id,
                 'full_name'        => $customer->full_name,
@@ -64,9 +63,8 @@ class BookingController extends Controller
                 'map_link'         => $customer->location_link,
             ];
         } else {
-            // الحجز لشخص آخر: نستخدم البيانات المكتوبة يدوياً بالفورم
             $bookingData = [
-                'customer_id'      => $customer->id, // لسا مربوط بصاحب الحساب (هو يلي طلب الحجز)
+                'customer_id'      => $customer->id,
                 'full_name'        => $validated['full_name'],
                 'phone'            => $validated['phone'],
                 'national_id'      => $validated['national_id'],
@@ -79,38 +77,34 @@ class BookingController extends Controller
             ];
         }
 
+        // ✅ تعريف $options أول شي، قبل أي كتلة تحقق سعر
+        $options = $validated['service_options'] ?? [];
+
+        // 🟢 1. تأكيد سعر تنظيف المكيفات (ID: 2)
         if ((int)$validated['service_id'] === 2 && !empty($options)) {
             $units = isset($options['units_count']) ? (int)$options['units_count'] : 1;
-            
+
             $prices = [
-                1 => 1500,
-                2 => 2500,
-                3 => 3500,
-                4 => 4500,
-                5 => 5500,
-                6 => 6500,
+                1 => 1500, 2 => 2500, 3 => 3500,
+                4 => 4500, 5 => 5500, 6 => 6500,
             ];
 
             $options['total_price'] = $prices[$units] ?? 1500;
         }
 
-        // تجهيز خيارات الخدمة والتأكد من السعر إذا كانت الخدمة "مناسبات" (ID: 3)
-        $options = $validated['service_options'] ?? [];
-
+        // 🟢 2. تأكيد سعر المناسبات (ID: 3)
         if ((int)$validated['service_id'] === 3 && !empty($options)) {
             $minutes = isset($options['start_time_minutes']) ? (int)$options['start_time_minutes'] : 600;
             $duration = isset($options['duration_hours']) ? (int)$options['duration_hours'] : 4;
             $workers = isset($options['workers']) ? (int)$options['workers'] : 2;
 
-            // إعادة حساب السعر في السيرفر لضمان موثوقية التكلفة
             $options['total_price'] = $this->calculateEventsPrice($minutes, $duration, $workers);
         }
 
-        // 🟢 4. معالجة وتأكيد سعر خدمة "مكافحة الحشرات" (ID: 4)
+        // 🟢 3. تأكيد سعر مكافحة الحشرات (ID: 4)
         if ((int)$validated['service_id'] === 4 && !empty($options)) {
             $packageName = $options['package'] ?? '';
 
-            // خريطة أسعار الباقات المطابقة تماماً لصفحة HTML
             $packagePrices = [
                 'غرفة واحدة'      => 1200,
                 'غرفتين'          => 1800,
@@ -118,15 +112,18 @@ class BookingController extends Controller
                 'المنزل بالكامل'  => 3500,
             ];
 
-            // تحديد السعر من جدول الأسعار أو الاعتماد على السعر الممرر من الفرونت إند
             if (isset($packagePrices[$packageName])) {
                 $options['total_price'] = $packagePrices[$packageName];
             } elseif (isset($options['total_price']) && is_numeric($options['total_price'])) {
                 $options['total_price'] = (float)$options['total_price'];
             } else {
-                $options['total_price'] = 3500; // سعر افتراضي
+                $options['total_price'] = 3500;
             }
         }
+
+        // ✅ السعر الأساسي الفعلي: من الخيارات الديناميكية إن وُجد، وإلا من سعر الخدمة الثابت
+        $basePrice = $options['total_price'] ?? null;
+
         $discountAmount = 0;
 
         if (!empty($validated['coupon_code'])) {
@@ -137,13 +134,10 @@ class BookingController extends Controller
             if ($coupon && (!$coupon->expires_at || $coupon->expires_at >= now())
                 && (!$coupon->max_uses || $coupon->used_count < $coupon->max_uses)) {
 
-                $service = \App\Models\Service::find($validated['service_id']);
-                $servicePrice = $service->price ?? 0;
-
-                if ($servicePrice >= $coupon->min_order_amount) {
+                if ($basePrice !== null && $basePrice >= $coupon->min_order_amount) {
                     $discountAmount = $coupon->type === 'percentage'
-                        ? round($servicePrice * ($coupon->value / 100), 2)
-                        : min($coupon->value, $servicePrice);
+                        ? round($basePrice * ($coupon->value / 100), 2)
+                        : min($coupon->value, $basePrice);
 
                     $coupon->increment('used_count');
                 }
@@ -164,6 +158,7 @@ class BookingController extends Controller
             'booking' => $booking,
         ], 201);
     }
+
     // إلغاء الحجز (بس لو pending)
     public function cancel(Request $request, $id): JsonResponse
     {
@@ -214,6 +209,13 @@ class BookingController extends Controller
             'coupon_code' => 'nullable|string',
         ]);
 
+        // الخدمات بدون سعر مسبق (تنظيف=1، كهرباء=5، سباكة=6): دفع نقدي فقط
+        if (in_array((int)$validated['service_id'], [1, 5, 6]) && $validated['payment_method'] === 'online') {
+            return response()->json([
+                'message' => 'الدفع الإلكتروني غير متاح لهذه الخدمة حالياً، الرجاء اختيار الدفع نقداً.'
+            ], 422);
+        }
+
         $booking->update($validated);
 
         return response()->json([
@@ -225,7 +227,7 @@ class BookingController extends Controller
     {
         $bookings = $request->user()
             ->bookings()
-            ->with('service')
+            ->with(['service', 'review']) 
             ->latest()
             ->get();
 
