@@ -22,12 +22,11 @@ class ServiceController extends Controller
         $request->validate([
             'name'        => 'required|string|max:255',
             'description' => 'nullable|string',
-            'image'       => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image'       => 'nullable',
         ]);
 
         $imagePath = null;
 
-        // التحقق من رفع صورة وحفظها في مجلد storage/app/public/services
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('services', 'public');
             $imagePath = Storage::url($path);
