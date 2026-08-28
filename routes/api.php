@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\ReviewController;
 // عام
 Route::get('/services', [ServiceController::class, 'index']);
 Route::get('/reviews', [ReviewController::class, 'index']);
+Route::get('/coupons', [CouponController::class, 'index']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
